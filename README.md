@@ -26,7 +26,7 @@ https://rss.example.com/weibo/user/123456?key=<你的密钥>
 
 ### 站点图标（可选）
 
-在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加普通 **Variable**（不是 Secret），变量名为 `RSS_SITE_ICON_URL`，值填写可公开访问的 HTTPS 图片直链。它只用于 Worker HTML 页面的浏览器标签页图标（favicon），不会写入 RSS XML。本仓库启用 `keep_vars = true`，以便 Wrangler 自动部署时保留在 Cloudflare 面板中设置的变量。未设置或 URL 无效时不输出图标。本地开发可在被 Git 忽略的 `.dev.vars` 中设置同名变量。图标地址由运行环境提供，不写入源码。
+在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加普通 **Variable**（不是 Secret），变量名为 `RSS_SITE_ICON_URL`，值填写可公开访问的 HTTPS 图片直链。它用于 Worker HTML 页面的浏览器标签页图标（favicon），也供公开的 `/favicon.ico` 地址重定向到该图片；不会写入 RSS XML。只有这个静态图标入口不需要访问密钥，所有订阅数据地址仍必须提供正确的 `key`。本仓库启用 `keep_vars = true`，以便 Wrangler 自动部署时保留在 Cloudflare 面板中设置的变量。未设置或 URL 无效时不输出图标。本地开发可在被 Git 忽略的 `.dev.vars` 中设置同名变量。图标地址由运行环境提供，不写入源码。
 
 > 小红书更新后不能再使用小红书号，需要使用小红书用户ID。  
 > 获取方法：  

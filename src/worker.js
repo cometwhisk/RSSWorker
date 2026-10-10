@@ -25,6 +25,9 @@ app.use(
 
 // RSS readers authenticate with the query key; do not fall back to other auth modes.
 app.use('/*', async (ctx, next) => {
+	if (ctx.req.path === '/favicon.ico' && ['GET', 'HEAD'].includes(ctx.req.method)) {
+		return next();
+	}
 	const accessKey = ctx.env?.RSS_ACCESS_KEY;
 	if (typeof accessKey !== 'string' || accessKey.length === 0) {
 		return ctx.text('RSS access key is not configured', 503);
@@ -36,8 +39,20 @@ app.use('/*', async (ctx, next) => {
 	return next();
 });
 
+app.use('/*', async (ctx, next) => {
+	ctx.header('Referrer-Policy', 'no-referrer');
+	await next();
+});
+
 // Canonical feed URLs are mounted directly at the host root.
 app.route('/', route);
+app.on(['GET', 'HEAD'], '/favicon.ico', (ctx) => {
+	const iconUrl = getSiteIconUrl(ctx.env);
+	if (!iconUrl) {
+		return ctx.body(null, 404);
+	}
+	return ctx.redirect(iconUrl, 302);
+});
 app.get('/', (ctx) => {
 	return ctx.html(renderHtml(indexHtml, ctx.env));
 });

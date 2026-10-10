@@ -1,44 +1,4 @@
 import { renderRss2 } from '../../utils/util';
-import xhsNoteImages from './note_images';
-
-const { buildNoteImageHtml, cancelResponseBody, decodeHrefAttribute, extractNoteImageUrls, getNoteImageUrls, parseInitialStateScript } = xhsNoteImages;
-const XHS_ORIGIN = 'https://www.xiaohongshu.com';
-// One profile request plus at most 48 detail requests stays below the Free plan's 50-subrequest limit.
-const MAX_NOTE_DETAIL_FETCHES = 48;
-const NOTE_DETAIL_CONCURRENCY = 4;
-
-const readInitialState = async (response) => {
-	const scripts = [];
-	const rewriter = new HTMLRewriter()
-		.on('script', {
-			element() {
-				scripts.push('');
-			},
-			text(text) {
-				scripts[scripts.length - 1] += text.text;
-			},
-		})
-		.transform(response);
-	await rewriter.text();
-	const script = scripts.find((value) => value.startsWith('window.__INITIAL_STATE__='));
-	if (!script) throw new Error('Xiaohongshu page state was not found');
-	return parseInitialStateScript(script);
-};
-
-const mapWithConcurrency = async (items, limit, mapper) => {
-	const results = new Array(items.length);
-	let nextIndex = 0;
-	await Promise.all(
-		Array.from({ length: Math.min(limit, items.length) }, async () => {
-			while (true) {
-				const index = nextIndex++;
-				if (index >= items.length) return;
-				results[index] = await mapper(items[index], index);
-			}
-		})
-	);
-	return results;
-};
 
 let getUser = async (url, cookie) => {
 	let res = await fetch(url, {
@@ -51,7 +11,6 @@ let getUser = async (url, cookie) => {
 		}
 	});
 	if (!res.ok || (res.url && new URL(res.url).pathname.startsWith('/login'))) {
-		await cancelResponseBody(res);
 		throw new Error('Xiaohongshu did not return an authenticated profile page');
 	}
 	let scripts = [];
@@ -67,7 +26,7 @@ let getUser = async (url, cookie) => {
 		})
 		.on('a[href*="xsec_token"]', {
 			element(element) {
-				const href = decodeHrefAttribute(element.getAttribute('href'));
+				const href = element.getAttribute('href');
 				if (!href) return;
 				const match = href.match(/\/([0-9a-f]{24})(?:\?|$)/i);
 				if (!match || !href.includes('?')) return;
@@ -83,11 +42,14 @@ let getUser = async (url, cookie) => {
 		})
 		.transform(res);
 	await rewriter.text();
-	const script = scripts.find((script) => script.startsWith('window.__INITIAL_STATE__='));
+	let script = scripts.find((script) => script.startsWith('window.__INITIAL_STATE__='));
 	if (!script) {
 		throw new Error('Xiaohongshu profile state was not found');
 	}
-	const state = parseInitialStateScript(script);
+	script = script.slice('window.__INITIAL_STATE__='.length);
+	// replace undefined to null
+	script = script.replace(/undefined/g, 'null');
+	let state = JSON.parse(script);
 	const user = state?.user;
 	if (!user || typeof user !== 'object') {
 		throw new Error('Xiaohongshu profile data was not found');
@@ -133,40 +95,21 @@ let deal = async (ctx) => {
 	const description = `${basicInfo.desc || ''} ${tags.map((t) => t?.name).filter(Boolean).join(' ')} ${interactions.map((i) => (i ? `${i.count} ${i.name}` : '')).filter(Boolean).join(' ')}`.trim();
 	const image = basicInfo.imageb || basicInfo.images;
 
-	const noteEntries = notes.flatMap((group) => (Array.isArray(group) ? group : []));
-	const noteImageLists = await mapWithConcurrency(noteEntries, NOTE_DETAIL_CONCURRENCY, async (entry, index) => {
-		const noteCard = entry?.noteCard;
-		if (!noteCard?.noteId) return [];
-		const cardImages = extractNoteImageUrls(noteCard.imageList);
-		if (index >= MAX_NOTE_DETAIL_FETCHES) return cardImages;
-
-		const noteUrl =
-			tokenizedPaths.get(entry?.id) ||
-			tokenizedPaths.get(noteCard.noteId) ||
-			`${XHS_ORIGIN}/explore/${noteCard.noteId}`;
-		const detailImages = await getNoteImageUrls({
-			noteId: noteCard.noteId,
-			noteUrl,
-			cookie,
-			parseState: readInitialState,
-		});
-		return detailImages?.length ? detailImages : cardImages;
-	});
-	const renderNote = (entries) =>
-		entries
-			.map((entry, index) => {
+	const renderNote = (notes) =>
+		notes
+			.flatMap((group) => (Array.isArray(group) ? group : []))
+			.map((entry) => {
 				const noteCard = entry?.noteCard;
 				if (!noteCard?.noteId) return null;
 				const noteTitle = noteCard.displayTitle || noteCard.noteId;
 				const coverList = Array.isArray(noteCard.cover?.infoList) ? noteCard.cover.infoList : [];
-				const coverUrl = extractNoteImageUrls([coverList.at(-1)?.url])[0];
+				const coverUrl = coverList.at(-1)?.url;
 				const noteUrl = tokenizedPaths.get(entry.id) || tokenizedPaths.get(noteCard.noteId);
-				const imageUrls = noteImageLists[index]?.length ? noteImageLists[index] : coverUrl ? [coverUrl] : [];
 				return {
 					title: noteTitle,
-					link: noteUrl || `${XHS_ORIGIN}/explore/${noteCard.noteId}`,
+					link: noteUrl || `https://www.xiaohongshu.com/explore/${noteCard.noteId}`,
 					guid: noteCard.noteId,
-					description: buildNoteImageHtml(imageUrls, noteTitle),
+					description: `${coverUrl ? `<img src="${coverUrl}"><br>` : ''}${noteTitle}`,
 					author: noteCard.user?.nickname || basicInfo.nickname,
 					upvotes: noteCard.interactInfo?.likedCount,
 				};
@@ -199,7 +142,7 @@ let deal = async (ctx) => {
 				description,
 				image,
 				link: url,
-				items: category === 'notes' ? renderNote(noteEntries) : [],
+				items: category === 'notes' ? renderNote(notes) : [],
 			}
 		)
 	);

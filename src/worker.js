@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { basicAuth } from 'hono/basic-auth';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { timingSafeEqual } from 'hono/utils/buffer';
@@ -15,32 +14,21 @@ const app = new Hono();
 app.use(
 	'/*',
 	cors({
-		allowHeaders: ['Authorization'],
 		allowMethods: ['GET', 'HEAD', 'OPTIONS'],
 	})
 );
 
-// Prefer URL-key authentication so RSS readers need no Basic Auth support.
-// Keep Basic Auth only as a migration fallback until RSS_ACCESS_KEY is configured.
+// RSS readers authenticate with the query key; do not fall back to other auth modes.
 app.use('/*', async (ctx, next) => {
 	const accessKey = ctx.env?.RSS_ACCESS_KEY;
-	if (accessKey !== undefined && accessKey !== null) {
-		if (typeof accessKey !== 'string' || accessKey.length === 0) {
-			return ctx.text('RSS access key is misconfigured', 503);
-		}
-		const suppliedKey = ctx.req.query('key');
-		if (!suppliedKey || !(await timingSafeEqual(accessKey, suppliedKey))) {
-			return ctx.text('Missing or invalid access key', 403);
-		}
-		return next();
+	if (typeof accessKey !== 'string' || accessKey.length === 0) {
+		return ctx.text('RSS access key is not configured', 503);
 	}
-
-	const username = ctx.env?.RSS_AUTH_USERNAME;
-	const password = ctx.env?.RSS_AUTH_PASSWORD;
-	if (username && password) {
-		return basicAuth({ username, password, realm: 'RSSWorker' })(ctx, next);
+	const suppliedKey = ctx.req.query('key');
+	if (!suppliedKey || !(await timingSafeEqual(accessKey, suppliedKey))) {
+		return ctx.text('Missing or invalid access key', 403);
 	}
-	return ctx.text('RSS access key is not configured', 503);
+	return next();
 });
 
 app.route('/rss', route);

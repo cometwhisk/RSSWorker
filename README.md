@@ -14,15 +14,15 @@ RSSWorker 是一个轻量级的 RSS 订阅工具，可以部署在 Cloudflare Wo
 
 ## 访问保护
 
-内容请求使用 URL 密钥认证，RSS 阅读器无需支持 HTTP Basic Auth。部署后，在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加名为 `RSS_ACCESS_KEY` 的 Secret。订阅链接需附加 `?key=<你的密钥>`，例如：
+内容请求只使用 URL 密钥认证，RSS 阅读器只需保存带密钥的链接。部署后，在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加名为 `RSS_ACCESS_KEY` 的 Secret。订阅链接需附加 `?key=<你的密钥>`，例如：
 
 ```text
 https://example.com/rss/weibo/user/123456?key=<你的密钥>
 ```
 
-无密钥或密钥错误时返回 403；未配置认证或密钥为空时返回 503。跨域 `OPTIONS` 预检由 CORS 中间件直接返回 204，不要求密钥，也不会返回订阅内容。`wrangler secret put RSS_ACCESS_KEY` 会设置已部署 Worker 的 Secret 并部署新版本；本地 `wrangler dev` 请在被 Git 忽略的 `.dev.vars` 文件中配置 `RSS_ACCESS_KEY`。请勿把实际值提交到 Git。
+无密钥或密钥错误时返回 403；`RSS_ACCESS_KEY` 未配置或为空时返回 503，不会退回其他认证方式。跨域 `OPTIONS` 预检由 CORS 中间件直接返回 204，不要求密钥，也不会返回订阅内容。`wrangler secret put RSS_ACCESS_KEY` 会设置已部署 Worker 的 Secret 并部署新版本；本地 `wrangler dev` 请在被 Git 忽略的 `.dev.vars` 文件中配置 `RSS_ACCESS_KEY`。请勿把实际值提交到 Git。
 
-为平滑迁移，若尚未配置 `RSS_ACCESS_KEY`、但仍保留旧的 `RSS_AUTH_USERNAME` 和 `RSS_AUTH_PASSWORD` Secrets，Worker 会暂时继续使用 Basic Auth（缺失或错误时返回 401）。配置非空 `RSS_ACCESS_KEY` 后，URL 密钥认证优先且 Basic Auth 不再生效；旧的 Basic Auth 订阅会立即需要改成带 key 的链接。确认新链接可用后可删除旧的两个 Secrets。密钥就是链接本身的访问凭据：任何拿到完整链接的人都能访问订阅；链接可能留在阅读器历史或请求日志中，请不要公开或截图泄露。使用 HTTPS，并设置随机、独立、URL 安全的长密钥；如果密钥意外泄露，应更换 `RSS_ACCESS_KEY` 并更新订阅链接。
+密钥就是链接本身的访问凭据：任何拿到完整链接的人都能访问订阅；链接可能留在阅读器历史或请求日志中，请不要公开或截图泄露。使用 HTTPS，并设置随机、独立、URL 安全的长密钥；如果密钥意外泄露，应更换 `RSS_ACCESS_KEY` 并更新订阅链接。
 
 > 小红书更新后不能再使用小红书号，需要使用小红书用户ID。  
 > 获取方法：  

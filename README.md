@@ -12,6 +12,15 @@ RSSWorker 是一个轻量级的 RSS 订阅工具，可以部署在 Cloudflare Wo
 - weibo 用户 (/weibo/user/:uid)
 - 小红书用户 (/xiaohongshu/user/:uid)
 
+## 访问保护
+
+所有内容请求均使用 HTTP Basic Auth；跨域 `OPTIONS` 预检由 CORS 中间件直接返回 204，不要求认证，也不会返回订阅内容。部署后，在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加以下 Secrets：
+
+- `RSS_AUTH_USERNAME`
+- `RSS_AUTH_PASSWORD`
+
+`wrangler secret put RSS_AUTH_USERNAME` 和 `wrangler secret put RSS_AUTH_PASSWORD` 会设置**已部署 Worker** 的 Secrets；本地 `wrangler dev` 请在被 Git 忽略的 `.dev.vars` 文件中设置这两个值。请勿把实际值提交到 Git。未配置 Secrets 时 Worker 返回 503，错误凭据返回 401。RSS 阅读器需要支持 HTTP Basic Auth；使用 HTTPS，并为 RSS 单独设置强密码。
+
 > 小红书更新后不能再使用小红书号，需要使用小红书用户ID。  
 > 获取方法：  
 > 移动端：用户页面 > 右上角三个点 > 复制链接 > 获取链接中的用户ID  
@@ -29,7 +38,7 @@ RSSWorker 是一个轻量级的 RSS 订阅工具，可以部署在 Cloudflare Wo
 
 ## 部署
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yllhwa/RSSWorker)
+在 Cloudflare Dashboard 中进入 **Workers & Pages → Create application → Import a repository**，选择本仓库的 Fork 并部署。Worker 名称需与 `wrangler.toml` 中的 `name` 一致。部署后先配置上面的 Basic Auth Secrets，再将带认证的 Feed 地址添加到 RSS 阅读器。
 
 ## 开发
 

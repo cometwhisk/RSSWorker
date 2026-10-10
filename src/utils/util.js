@@ -23,8 +23,9 @@ const getSiteIconUrl = (env = {}) => {
 	return '';
 };
 
-let renderRss2 = (content, env = {}) => {
-	let renderedText = mustache.render(rss2Template, { ...content, siteIconUrl: getSiteIconUrl(env) });
+
+let renderRss2 = (content) => {
+	let renderedText = mustache.render(rss2Template, content);
 	return renderedText;
 };
 

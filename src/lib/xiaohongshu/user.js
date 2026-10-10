@@ -143,8 +143,7 @@ let deal = async (ctx) => {
 				image,
 				link: url,
 				items: category === 'notes' ? renderNote(notes) : [],
-			},
-			ctx.env
+			}
 		)
 	);
 };

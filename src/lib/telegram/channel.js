@@ -102,7 +102,7 @@ let deal = async (ctx) => {
 		items: items,
 	};
 	ctx.header('Content-Type', 'application/xml');
-	return ctx.body(renderRss2(data, ctx.env));
+	return ctx.body(renderRss2(data));
 };
 
 let setup = (route) => {

@@ -250,7 +250,7 @@ let deal = async (ctx) => {
 		// category: 'bilibili',
 		items: items,
 	};
-	let rss = renderRss2(data, ctx.env);
+	let rss = renderRss2(data);
 	ctx.header('Content-Type', 'application/xml');
 	return ctx.body(`${rss}`);
 };

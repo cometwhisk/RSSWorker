@@ -34,7 +34,7 @@ https://rss.example.com/weibo/user/123456?key=<你的密钥>
 > 网页端：用户页面 > 链接中的用户ID  
 > 格式：https://www.xiaohongshu.com/user/profile/5d2aec020000000012037401
 
-小红书订阅还需要在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加 Secret `XIAOHONGSHU_COOKIE`。请在已登录的小红书网页开发者工具的 Network 面板中，找到小红书主页请求并复制其 Request Headers 里的 `Cookie` 值，直接粘贴到 Cloudflare Secret；不要把 Cookie 发到聊天或提交到 Git。Cookie 是登录凭据，可能过期；过期后更新 Secret。未配置时该路由返回 503，Cookie 失效或主页仍被重定向时返回 502。若本地运行，`XIAOHONGSHU_COOKIE` 可放在被 Git 忽略的 `.dev.vars` 文件中。
+小红书订阅还需要在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加 Secret `XIAOHONGSHU_COOKIE`。请在已登录的小红书网页开发者工具的 Network 面板中，找到小红书主页请求并复制其 Request Headers 里的 `Cookie` 值，直接粘贴到 Cloudflare Secret；不要把 Cookie 发到聊天或提交到 Git。Cookie 是登录凭据，可能过期；过期后更新 Secret。未配置时该路由返回 503，Cookie 失效或主页仍被重定向时返回 502。若本地运行，`XIAOHONGSHU_COOKIE` 可放在被 Git 忽略的 `.dev.vars` 文件中。笔记详情可访问时，RSS 正文会包含该笔记的全部图片；每次最多为前 48 条笔记请求详情，最多 4 路并发，图片链接在 Worker 内存中缓存 10 分钟（非持久缓存）。某条详情不可用时仍保留该条封面图。
 
 > 微博更新后需要加上Cookie
 > 获取方法（参考 https://docs.rsshub.app/zh/deploy/config#%E5%BE%AE%E5%8D%9A ） ：

@@ -5,11 +5,11 @@ const MAX_CACHE_ENTRIES = 200;
 const noteImageCache = new Map();
 const pendingRequests = new Map();
 
-const toSafeHttpsUrl = (value) => {
+const toSafeImageUrl = (value) => {
 	if (typeof value !== 'string' || !value.trim()) return null;
 	try {
 		const url = new URL(value.trim(), XHS_ORIGIN);
-		if (url.protocol !== 'https:' || url.username || url.password) return null;
+		if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
 		return url.href;
 	} catch {
 		return null;
@@ -32,7 +32,7 @@ const extractNoteImageUrls = (imageList) => {
 			...(Array.isArray(image?.infoList) ? image.infoList.map((info) => info?.url) : []),
 		];
 		for (const candidate of candidates) {
-			const url = toSafeHttpsUrl(candidate);
+			const url = toSafeImageUrl(candidate);
 			if (url) {
 				urls.push(url);
 				break;
@@ -248,7 +248,7 @@ const escapeHtml = (value) =>
 		.replaceAll("'", '&#39;');
 
 const buildNoteImageHtml = (imageUrls, title) => {
-	const safeUrls = (Array.isArray(imageUrls) ? imageUrls : []).map(toSafeHttpsUrl).filter(Boolean);
+	const safeUrls = (Array.isArray(imageUrls) ? imageUrls : []).map(toSafeImageUrl).filter(Boolean);
 	const imageHtml = safeUrls.map((url) => `<img src="${escapeHtml(url)}">`).join('<br>');
 	return `${imageHtml}${imageHtml ? '<br>' : ''}${escapeHtml(title)}`;
 };

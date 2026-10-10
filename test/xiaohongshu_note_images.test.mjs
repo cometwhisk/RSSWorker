@@ -19,17 +19,24 @@ const userId = 'abcdefabcdefabcdefabcdef';
 const noteUrl = `https://www.xiaohongshu.com/user/profile/${userId}/${noteId}?xsec_token=fixture-token&xsec_source=pc_feed&redirect=https%3A%2F%2Fevil.example`;
 const detailUrl = `https://www.xiaohongshu.com/explore/${noteId}?xsec_token=fixture-token&xsec_source=pc_feed`;
 
-test('extractNoteImageUrls returns distinct HTTPS image URLs in source order', () => {
+test('extractNoteImageUrls keeps distinct HTTP(S) image URLs in source order', () => {
 	assert.deepEqual(
 		extractNoteImageUrls([
 			{ urlDefault: 'https://cdn.example/a.jpg' },
 			{ urlDefault: 'https://cdn.example/a.jpg' },
 			{ urlDefault: 'https://cdn.example/b.jpg' },
 			{ infoList: [{ url: 'https://cdn.example/c.jpg' }] },
-			{ urlDefault: 'http://cdn.example/insecure.jpg' },
+			{ urlDefault: 'http://cdn.example/legacy-cover.jpg' },
 			{ urlDefault: 'javascript:alert(1)' },
+			{ urlDefault: 'data:image/png;base64,AA==' },
+			{ urlDefault: 'https://user:pass@cdn.example/credentialed.jpg' },
 		]),
-		['https://cdn.example/a.jpg', 'https://cdn.example/b.jpg', 'https://cdn.example/c.jpg']
+		[
+			'https://cdn.example/a.jpg',
+			'https://cdn.example/b.jpg',
+			'https://cdn.example/c.jpg',
+			'http://cdn.example/legacy-cover.jpg',
+		]
 	);
 });
 
@@ -72,6 +79,7 @@ test('buildNoteImageHtml renders every image and escapes HTML values', () => {
 	assert.equal((html.match(/<img\b/g) || []).length, 2);
 	assert.match(html, /a\.jpg\?x=1&amp;y=2/);
 	assert.match(html, /&lt;title &amp; description&gt;/);
+	assert.match(buildNoteImageHtml(['http://cdn.example/legacy-cover.jpg'], 'legacy cover'), /<img src="http:\/\/cdn\.example\/legacy-cover\.jpg">/);
 });
 
 test('getNoteImageUrls uses the fixed XHS host, Cookie, and manual redirects', async () => {

@@ -8,21 +8,24 @@ let renderAtom = (content) => {
 	return renderedText;
 };
 
-let renderRss2 = (content, env = {}) => {
-	let siteIconUrl = '';
+const getSiteIconUrl = (env = {}) => {
 	const configuredIconUrl = typeof env?.RSS_SITE_ICON_URL === 'string' ? env.RSS_SITE_ICON_URL.trim() : '';
 	if (configuredIconUrl) {
 		try {
 			const iconUrl = new URL(configuredIconUrl);
 			if (iconUrl.protocol === 'https:') {
-				siteIconUrl = iconUrl.href;
+				return iconUrl.href;
 			}
 		} catch {
 			// Ignore an invalid optional icon URL rather than breaking the feed.
 		}
 	}
-	let renderedText = mustache.render(rss2Template, { ...content, siteIconUrl });
+	return '';
+};
+
+let renderRss2 = (content, env = {}) => {
+	let renderedText = mustache.render(rss2Template, { ...content, siteIconUrl: getSiteIconUrl(env) });
 	return renderedText;
 };
 
-export { renderAtom, renderRss2 };
+export { renderAtom, renderRss2, getSiteIconUrl };

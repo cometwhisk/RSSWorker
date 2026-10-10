@@ -2,12 +2,17 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { timingSafeEqual } from 'hono/utils/buffer';
+import mustache from 'mustache';
 import indexHtml from './html/index.html';
 import notFoundHtml from './html/404.html';
 import errorHtml from './html/err.html';
 import robotsTxt from './robots.txt';
+import { getSiteIconUrl } from './utils/util';
 
 import route from './route';
+
+const renderHtml = (template, env, data = {}) =>
+	mustache.render(template, { ...data, siteIconUrl: getSiteIconUrl(env) });
 
 const app = new Hono();
 
@@ -34,7 +39,7 @@ app.use('/*', async (ctx, next) => {
 // Canonical feed URLs are mounted directly at the host root.
 app.route('/', route);
 app.get('/', (ctx) => {
-	return ctx.html(indexHtml);
+	return ctx.html(renderHtml(indexHtml, ctx.env));
 });
 app.get('robots.txt', (ctx) => {
 	return ctx.text(robotsTxt);
@@ -43,16 +48,16 @@ app.get('/debug', (ctx) => {
 	return ctx.json(ctx.req.raw?.cf);
 });
 app.notFound((ctx) => {
-	return ctx.html(notFoundHtml, 404);
+	return ctx.html(renderHtml(notFoundHtml, ctx.env), 404);
 });
 app.onError((err, c) => {
 	if (err instanceof HTTPException) {
 		return err.getResponse();
 	}
-	let stack_str = err.stack;
-	let stack_arr = stack_str.split('\n').join('<br>');
-	let result = errorHtml.replace('{ERROR_MESSAGE}', `${err}`);
-	result = result.replace('{ERROR_STACK}', `${stack_arr}`);
+	const result = renderHtml(errorHtml, c.env, {
+		errorMessage: String(err),
+		errorStack: String(err.stack ?? err),
+	});
 	return c.html(result, 500);
 });
 

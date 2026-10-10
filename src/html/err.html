@@ -3,12 +3,16 @@
 	<head>
 		<meta charset="utf-8" />
 		<title>RSSWorker - Made with ❤</title>
+		{{#siteIconUrl}}
+		<link rel="icon" href="{{siteIconUrl}}" />
+		{{/siteIconUrl}}
 	</head>
 	<body>
 		<h1>RSSWorker - Made with ❤</h1>
 		<p>500 - Internal Server Error</p>
-		<p>debug message: {ERROR_MESSAGE}</p>
-		<p>stack: <br />{ERROR_STACK}</p>
+		<p>debug message: {{errorMessage}}</p>
+		<p>stack:</p>
+		<pre>{{errorStack}}</pre>
 		<p>See <a href="https://github.com/yllhwa/RSSWorker">GitHub</a> for more information.</p>
 	</body>
 </html>

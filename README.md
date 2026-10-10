@@ -26,7 +26,7 @@ https://rss.example.com/weibo/user/123456?key=<你的密钥>
 
 ### 站点图标（可选）
 
-如需让 RSS 阅读器显示统一的订阅图标，在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加普通 **Variable**（不是 Secret），变量名为 `RSS_SITE_ICON_URL`，值填写可公开访问的 HTTPS 图片直链。RSS 2.0 的频道图片标准格式为 GIF、JPEG 或 PNG。该变量应用到所有 RSS 订阅；未设置或 URL 无效时不输出全局图标。本地开发可在被 Git 忽略的 `.dev.vars` 中设置同名变量。图标地址由运行环境提供，不写入源码。
+在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加普通 **Variable**（不是 Secret），变量名为 `RSS_SITE_ICON_URL`，值填写可公开访问的 HTTPS 图片直链。它会作为 Worker HTML 页面的浏览器标签页图标（favicon），并写入 RSS 2.0 频道 `<image>` 元素；RSS 频道图片标准格式为 GIF、JPEG 或 PNG，具体是否展示还取决于 RSS 阅读器。本仓库启用 `keep_vars = true`，以便 Wrangler 自动部署时保留在 Cloudflare 面板中设置的变量。未设置或 URL 无效时不输出图标。本地开发可在被 Git 忽略的 `.dev.vars` 中设置同名变量。图标地址由运行环境提供，不写入源码。
 
 > 小红书更新后不能再使用小红书号，需要使用小红书用户ID。  
 > 获取方法：  

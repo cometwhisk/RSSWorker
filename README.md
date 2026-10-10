@@ -24,6 +24,10 @@ https://rss.example.com/weibo/user/123456?key=<你的密钥>
 
 密钥就是链接本身的访问凭据：任何拿到完整链接的人都能访问订阅；链接可能留在阅读器历史或请求日志中，请不要公开或截图泄露。使用 HTTPS，并设置随机、独立、URL 安全的长密钥；如果密钥意外泄露，应更换 `RSS_ACCESS_KEY` 并更新订阅链接。
 
+### 站点图标（可选）
+
+如需让 RSS 阅读器显示统一的订阅图标，在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加普通 **Variable**（不是 Secret），变量名为 `RSS_SITE_ICON_URL`，值填写可公开访问的 HTTPS 图片直链。RSS 2.0 的频道图片标准格式为 GIF、JPEG 或 PNG。该变量应用到所有 RSS 订阅；未设置或 URL 无效时不输出全局图标。本地开发可在被 Git 忽略的 `.dev.vars` 中设置同名变量。图标地址由运行环境提供，不写入源码。
+
 > 小红书更新后不能再使用小红书号，需要使用小红书用户ID。  
 > 获取方法：  
 > 移动端：用户页面 > 右上角三个点 > 复制链接 > 获取链接中的用户ID  

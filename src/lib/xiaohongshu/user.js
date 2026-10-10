@@ -136,13 +136,16 @@ let deal = async (ctx) => {
 
 	ctx.header('Content-Type', 'application/rss+xml; charset=UTF-8');
 	return ctx.body(
-		renderRss2({
-			title,
-			description,
-			image,
-			link: url,
-			items: category === 'notes' ? renderNote(notes) : [],
-		})
+		renderRss2(
+			{
+				title,
+				description,
+				image,
+				link: url,
+				items: category === 'notes' ? renderNote(notes) : [],
+			},
+			ctx.env
+		)
 	);
 };
 

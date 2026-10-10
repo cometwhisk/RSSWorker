@@ -31,7 +31,8 @@ app.use('/*', async (ctx, next) => {
 	return next();
 });
 
-app.route('/rss', route);
+// Canonical feed URLs are mounted directly at the host root.
+app.route('/', route);
 app.get('/', (ctx) => {
 	return ctx.html(indexHtml);
 });
@@ -42,7 +43,7 @@ app.get('/debug', (ctx) => {
 	return ctx.json(ctx.req.raw?.cf);
 });
 app.notFound((ctx) => {
-	return ctx.html(notFoundHtml);
+	return ctx.html(notFoundHtml, 404);
 });
 app.onError((err, c) => {
 	if (err instanceof HTTPException) {

@@ -4,7 +4,7 @@ RSSWorker 是一个轻量级的 RSS 订阅工具，可以部署在 Cloudflare Wo
 
 ## 支持
 
-注：以下路由均在 `[域名]/rss/` 下，如 `https://example.com/rss/bilibili/user/dynamic/1`。
+订阅路由直接挂在域名根路径下，例如 `https://rss.example.com/bilibili/user/dynamic/1`。订阅地址无需在路径中添加 `/rss`。
 
 - bilibili 动态 (/bilibili/user/dynamic/:uid)
 - bilibili 视频 (/bilibili/user/video/:uid)
@@ -17,7 +17,7 @@ RSSWorker 是一个轻量级的 RSS 订阅工具，可以部署在 Cloudflare Wo
 内容请求只使用 URL 密钥认证，RSS 阅读器只需保存带密钥的链接。部署后，在 Cloudflare Worker 的 **Settings → Variables and Secrets** 中添加名为 `RSS_ACCESS_KEY` 的 Secret。订阅链接需附加 `?key=<你的密钥>`，例如：
 
 ```text
-https://example.com/rss/weibo/user/123456?key=<你的密钥>
+https://rss.example.com/weibo/user/123456?key=<你的密钥>
 ```
 
 无密钥或密钥错误时返回 403；`RSS_ACCESS_KEY` 未配置或为空时返回 503，不会退回其他认证方式。跨域 `OPTIONS` 预检由 CORS 中间件直接返回 204，不要求密钥，也不会返回订阅内容。`wrangler secret put RSS_ACCESS_KEY` 会设置已部署 Worker 的 Secret 并部署新版本；本地 `wrangler dev` 请在被 Git 忽略的 `.dev.vars` 文件中配置 `RSS_ACCESS_KEY`。请勿把实际值提交到 Git。

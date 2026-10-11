@@ -1,14 +1,15 @@
 import { renderRss2 } from '../../utils/util';
 
 let getUser = async (url, cookie) => {
+	const headers = {
+		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+		Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+		'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+	};
+	if (cookie) headers.Cookie = cookie;
 	let res = await fetch(url, {
 		redirect: 'manual', // Do not forward the session Cookie across redirects.
-		headers: {
-			"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-			Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-			'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-			Cookie: cookie,
-		}
+		headers,
 	});
 	if (!res.ok || (res.url && new URL(res.url).pathname.startsWith('/login'))) {
 		throw new Error('Xiaohongshu did not return an authenticated profile page');
@@ -70,17 +71,14 @@ let deal = async (ctx) => {
 	const { uid } = ctx.req.param();
 	const category = 'notes';
 	const url = `https://www.xiaohongshu.com/user/profile/${uid}`;
-	const cookie = ctx.env?.XIAOHONGSHU_COOKIE;
-	if (typeof cookie !== 'string' || !cookie.trim()) {
-		return ctx.text('XIAOHONGSHU_COOKIE is not configured', 503);
-	}
+	const cookie = typeof ctx.env?.XIAOHONGSHU_COOKIE === 'string' ? ctx.env.XIAOHONGSHU_COOKIE.trim() : '';
 
 	let user;
 	let tokenizedPaths;
 	try {
-		({ user, tokenizedPaths } = await getUser(url, cookie.trim()));
+		({ user, tokenizedPaths } = await getUser(url, cookie));
 	} catch {
-		return ctx.text('小红书未返回用户资料。请检查 XIAOHONGSHU_COOKIE 是否有效，或稍后再试。', 502);
+		return ctx.text('小红书未返回可用用户资料。未登录访问可能受限；如需登录态，请检查 XIAOHONGSHU_COOKIE。', 502);
 	}
 	const userPageData = user.userPageData;
 	const basicInfo = userPageData?.basicInfo;

@@ -27,7 +27,7 @@ https://rss.example.com/weibo/user/123456?key=<密钥>
 
 ## 小红书
 
-使用用户主页链接中的用户 ID（不是小红书号）。订阅还需要在 Cloudflare 添加 `XIAOHONGSHU_COOKIE` Secret；Cookie 失效时更新即可。请勿公开或提交 Cookie。
+使用用户主页链接中的用户 ID（不是小红书号）。未配置 `XIAOHONGSHU_COOKIE` 时会匿名请求；配置该 Secret 时请求会携带登录 Cookie。匿名访问可能被小红书限制，此时可在 Cloudflare 添加 Secret 后重试。Cookie 失效时更新即可。请勿公开或提交 Cookie。
 
 ## 微博
 

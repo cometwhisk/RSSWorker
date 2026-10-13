@@ -9,7 +9,7 @@
 		"dev": "wrangler dev"
 	},
 	"devDependencies": {
-		"wrangler": "^4.94.0"
+	  "wrangler": "^4.150.0"
 	},
 	"dependencies": {
 		"dayjs": "^1.11.20",

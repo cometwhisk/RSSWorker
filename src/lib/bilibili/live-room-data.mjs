@@ -19,7 +19,132 @@ const normalizeRoomId = (value) => {
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-const getApiData = async (url, referer, fetchImpl) => {
+// Temporary and limited to 412 responses; remove after collecting the production cause.
+const diagnosticBodyLimit = 2048;
+const diagnosticReadTimeoutMs = 500;
+
+const classifyContentType = (value) => {
+	const mediaType = (value ?? '').split(';', 1)[0].trim().toLowerCase();
+	if (mediaType === 'application/json' || mediaType.endsWith('+json')) {
+		return 'json';
+	}
+	if (mediaType === 'text/html') {
+		return 'html';
+	}
+	if (mediaType.startsWith('text/')) {
+		return 'text';
+	}
+	return 'other';
+};
+
+const readDiagnosticBodyPrefix = async (response) => {
+	const reader = response.body?.getReader();
+	if (!reader) {
+		return '';
+	}
+
+	let timeoutId;
+	const readPrefix = async () => {
+		const chunks = [];
+		let bytesRead = 0;
+		while (bytesRead < diagnosticBodyLimit) {
+			const { done, value } = await reader.read();
+			if (done) {
+				break;
+			}
+			const chunk = value.subarray(0, diagnosticBodyLimit - bytesRead);
+			chunks.push(chunk);
+			bytesRead += chunk.byteLength;
+			if (chunk.byteLength < value.byteLength || bytesRead === diagnosticBodyLimit) {
+				break;
+			}
+		}
+
+		const bytes = new Uint8Array(bytesRead);
+		let offset = 0;
+		for (const chunk of chunks) {
+			bytes.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		return new TextDecoder().decode(bytes);
+	};
+
+	try {
+		return await Promise.race([
+			readPrefix(),
+			new Promise((resolve) => {
+				timeoutId = setTimeout(() => resolve(''), diagnosticReadTimeoutMs);
+			}),
+		]);
+	} catch {
+		return '';
+	} finally {
+		clearTimeout(timeoutId);
+		try {
+			reader.cancel().catch(() => {});
+		} catch {
+			// Cleanup is best effort and must not delay the route response.
+		}
+		try {
+			reader.releaseLock();
+		} catch {
+			// A pending read can retain the lock until cancellation settles.
+		}
+	}
+};
+
+const classifyDiagnosticBody = (text) => {
+	const normalized = text.toLowerCase();
+	if (/(captcha|verification|verify|验证码|人机验证|安全验证)/i.test(normalized)) {
+		return 'verification_challenge';
+	}
+	if (/(risk.?control|risk.?management|风控|风险控制|风险校验|访问频繁|请求频繁|异常访问)/i.test(normalized)) {
+		return 'risk_control';
+	}
+	if (/(forbidden|blocked|denied|拒绝|拦截|禁止访问)/i.test(normalized)) {
+		return 'access_rejected';
+	}
+	if (/(precondition|condition not met|前置条件|条件不满足)/i.test(normalized)) {
+		return 'precondition';
+	}
+	return text.trim() ? 'unclassified' : 'empty';
+};
+
+const logUpstream412 = async (endpoint, response) => {
+	try {
+		const contentTypeClass = classifyContentType(response.headers.get('content-type'));
+		const text = await readDiagnosticBodyPrefix(response);
+		let apiCode = null;
+		let message = '';
+		if (contentTypeClass === 'json') {
+			try {
+				const payload = JSON.parse(text);
+				if (Number.isSafeInteger(payload?.code)) {
+					apiCode = payload.code;
+				}
+				if (typeof payload?.message === 'string') {
+					message = payload.message;
+				} else if (typeof payload?.msg === 'string') {
+					message = payload.msg;
+				}
+			} catch {
+				// Keep malformed or truncated upstream response bodies out of logs.
+			}
+		}
+
+		console.error('[bilibili] upstream_412', {
+			endpoint,
+			status: 412,
+			contentTypeClass,
+			apiCode,
+			bodyClass: classifyDiagnosticBody(message || text),
+		});
+	} catch {
+		// Diagnostics must never change the route's existing error behavior.
+	}
+};
+
+const getApiData = async (url, referer, fetchImpl, endpoint) => {
 	let response;
 	try {
 		response = await fetchImpl(url, {
@@ -30,6 +155,9 @@ const getApiData = async (url, referer, fetchImpl) => {
 		throw new Error('Bilibili API request failed');
 	}
 	if (!response?.ok) {
+		if (response?.status === 412) {
+			await logUpstream412(endpoint, response);
+		}
 		throw new Error('Bilibili API request failed');
 	}
 
@@ -138,7 +266,7 @@ const parseLiveTime = (value) => {
 const getLiveRoomId = async (shortId, fetchImpl) => {
 	const url = new URL('https://api.live.bilibili.com/room/v1/Room/room_init');
 	url.searchParams.set('id', shortId);
-	const data = await getApiData(url, `https://live.bilibili.com/${shortId}`, fetchImpl);
+	const data = await getApiData(url, `https://live.bilibili.com/${shortId}`, fetchImpl, 'room_init');
 	try {
 		return normalizeRoomId(data.room_id);
 	} catch {
@@ -163,8 +291,8 @@ export const getLiveRoomData = async (inputRoomId, fetchImpl = globalThis.fetch)
 	roomInfoUrl.searchParams.set('from', 'room');
 
 	const [anchorData, roomData] = await Promise.all([
-		getApiData(anchorUrl, roomUrl, fetchImpl),
-		getApiData(roomInfoUrl, roomUrl, fetchImpl),
+		getApiData(anchorUrl, roomUrl, fetchImpl, 'anchor_info'),
+		getApiData(roomInfoUrl, roomUrl, fetchImpl, 'room_info'),
 	]);
 	if (!isObject(anchorData.info) || typeof anchorData.info.uname !== 'string' || !anchorData.info.uname.trim()) {
 		throw new Error('Bilibili API request failed');

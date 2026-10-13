@@ -113,6 +113,181 @@ test('rejects non-success Bilibili API envelopes', async () => {
 	await assert.rejects(getLiveRoomData('123456', fetcher), /Bilibili API request failed/);
 });
 
+test('logs a sanitized summary for an upstream 412 without exposing response text or room IDs', async () => {
+	const originalError = console.error;
+	const logEntries = [];
+	console.error = (...args) => logEntries.push(args);
+	try {
+		const fetcher = async () =>
+			new Response(JSON.stringify({ code: -412, message: 'risk control blocked key=synthetic-secret' }), {
+				status: 412,
+				headers: { 'Content-Type': 'application/json; charset=utf-8' },
+			});
+		await assert.rejects(getLiveRoomData('3', fetcher), /Bilibili API request failed/);
+	} finally {
+		console.error = originalError;
+	}
+
+	assert.equal(logEntries.length, 1);
+	assert.equal(logEntries[0][0], '[bilibili] upstream_412');
+	assert.deepEqual(logEntries[0][1], {
+		endpoint: 'room_init',
+		status: 412,
+		contentTypeClass: 'json',
+		apiCode: -412,
+		bodyClass: 'risk_control',
+	});
+	const serialized = JSON.stringify(logEntries);
+	assert.doesNotMatch(serialized, /synthetic-secret|risk control blocked|room_init\?id=3|live\.bilibili\.com/);
+});
+
+test('classifies a 412 HTML verification page without logging its body', async () => {
+	const originalError = console.error;
+	const logEntries = [];
+	console.error = (...args) => logEntries.push(args);
+	try {
+		const fetcher = async () =>
+			new Response('<html>captcha verification required</html>', {
+				status: 412,
+				headers: { 'Content-Type': 'text/html; charset=utf-8' },
+			});
+		await assert.rejects(getLiveRoomData('3', fetcher), /Bilibili API request failed/);
+	} finally {
+		console.error = originalError;
+	}
+
+	assert.equal(logEntries.length, 1);
+	assert.deepEqual(logEntries[0][1], {
+		endpoint: 'room_init',
+		status: 412,
+		contentTypeClass: 'html',
+		apiCode: null,
+		bodyClass: 'verification_challenge',
+	});
+	assert.doesNotMatch(JSON.stringify(logEntries), /captcha verification required|<html>/);
+});
+
+test('does not emit the temporary diagnostic for non-412 upstream failures', async () => {
+	const originalError = console.error;
+	const logEntries = [];
+	console.error = (...args) => logEntries.push(args);
+	try {
+		const fetcher = async () => new Response('blocked', { status: 403 });
+		await assert.rejects(getLiveRoomData('3', fetcher), /Bilibili API request failed/);
+	} finally {
+		console.error = originalError;
+	}
+	assert.deepEqual(logEntries, []);
+});
+
+test('bounds logged 412 classification and tolerates cancellation rejection', async () => {
+	const originalError = console.error;
+	const logEntries = [];
+	let cancelCalled = false;
+	console.error = (...args) => logEntries.push(args);
+	try {
+		const body = `${'x'.repeat(2100)} risk control blocked`;
+		const fetcher = async () => {
+			const stream = new ReadableStream({
+				start(controller) { controller.enqueue(new TextEncoder().encode(body)); },
+				cancel() {
+					cancelCalled = true;
+					return Promise.reject(new Error('synthetic cancel failure'));
+				},
+			});
+			return new Response(stream, { status: 412, headers: { 'Content-Type': 'text/room-510-secret' } });
+		};
+		await assert.rejects(getLiveRoomData('3', fetcher), /Bilibili API request failed/);
+	} finally {
+		console.error = originalError;
+	}
+
+	assert.equal(cancelCalled, true);
+	assert.deepEqual(logEntries[0][1], {
+		endpoint: 'room_init',
+		status: 412,
+		contentTypeClass: 'text',
+		apiCode: null,
+		bodyClass: 'unclassified',
+	});
+	assert.doesNotMatch(JSON.stringify(logEntries), /room-510-secret|risk control blocked|x{10}/);
+});
+
+test('returns the original error promptly when a 412 response body stalls', async () => {
+	const originalError = console.error;
+	const logEntries = [];
+	console.error = (...args) => logEntries.push(args);
+	const fetcher = async () => new Response(new ReadableStream({ pull: () => new Promise(() => {}) }), {
+		status: 412,
+		headers: { 'Content-Type': 'text/plain' },
+	});
+	const startedAt = Date.now();
+	try {
+		await assert.rejects(getLiveRoomData('3', fetcher), /Bilibili API request failed/);
+	} finally {
+		console.error = originalError;
+	}
+	assert.ok(Date.now() - startedAt < 1500, 'diagnostic must not wait indefinitely for the body');
+	assert.equal(logEntries.length, 1);
+	assert.equal(logEntries[0][1].bodyClass, 'empty');
+});
+
+test('keeps the route error unchanged when reading a 412 body rejects', async () => {
+	const originalError = console.error;
+	const logEntries = [];
+	console.error = (...args) => logEntries.push(args);
+	try {
+		const fetcher = async () => new Response(new ReadableStream({ pull() { throw new Error('synthetic stream failure'); } }), {
+			status: 412,
+			headers: { 'Content-Type': 'text/plain' },
+		});
+		await assert.rejects(getLiveRoomData('3', fetcher), /Bilibili API request failed/);
+	} finally {
+		console.error = originalError;
+	}
+	assert.equal(logEntries.length, 1);
+	assert.equal(logEntries[0][1].bodyClass, 'empty');
+});
+
+test('keeps the route error unchanged if console logging throws', async () => {
+	const originalError = console.error;
+	console.error = () => { throw new Error('synthetic logger failure'); };
+	try {
+		const fetcher = async () => new Response('verification required', { status: 412 });
+		await assert.rejects(getLiveRoomData('3', fetcher), /Bilibili API request failed/);
+	} finally {
+		console.error = originalError;
+	}
+});
+
+test('uses only fixed endpoint labels for all Bilibili 412 diagnostics', async () => {
+	for (const failedEndpoint of ['anchor_info', 'room_info']) {
+		const originalError = console.error;
+		const logEntries = [];
+		console.error = (...args) => logEntries.push(args);
+		try {
+			const fetcher = async (input) => {
+				const url = new URL(input);
+				if (url.pathname.endsWith('/get_anchor_in_room')) {
+					return failedEndpoint === 'anchor_info'
+						? new Response('{"code":-412,"message":"blocked"}', { status: 412, headers: { 'Content-Type': 'application/json' } })
+						: jsonResponse({ code: 0, data: { info: { uname: '测试主播' } } });
+				}
+				if (url.pathname.endsWith('/get_info')) {
+					return failedEndpoint === 'room_info'
+						? new Response('{"code":-412,"message":"blocked"}', { status: 412, headers: { 'Content-Type': 'application/json' } })
+						: jsonResponse({ code: 0, data: { live_status: 0 } });
+				}
+				return jsonResponse({ code: -404, message: 'unexpected endpoint' });
+			};
+			await assert.rejects(getLiveRoomData('123456', fetcher), /Bilibili API request failed/);
+		} finally {
+			console.error = originalError;
+		}
+		assert.deepEqual(logEntries.map((entry) => entry[1].endpoint), [failedEndpoint]);
+	}
+});
+
 test('rejects malformed room info instead of treating it as offline', async () => {
 	for (const roomInfo of [{}, []]) {
 		const { fetcher } = createFetcher({

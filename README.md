@@ -6,8 +6,8 @@
 
 路由直接挂在域名根路径下，无需 `/rss` 前缀。
 
-- Bilibili 动态：`/bilibili/user/dynamic/:uid`
-- Bilibili 视频：`/bilibili/user/video/:uid`
+- Bilibili 直播间：`/bilibili/live/room/:roomID`（支持短号和长号）
+- Twitch 直播频道：`/twitch/live/:login`
 - 微博用户：`/weibo/user/:uid`
 - 小红书用户：`/xiaohongshu/user/:uid`
 

@@ -7,6 +7,13 @@
   <description>{{description}}</description>
   <language>{{language}}</language>
   <category>{{category}}</category>
+  {{#image}}
+  <image>
+    <url>{{image}}</url>
+    <title><![CDATA[{{{title}}}]]></title>
+    <link>{{link}}</link>
+  </image>
+  {{/image}}
   {{#items}}
     <item>
         <title><![CDATA[{{{title}}}]]></title>
@@ -16,7 +23,7 @@
         <pubDate>{{pubDate}}</pubDate>
         {{/pubDate}}
         {{#guid}}
-        <guid>{{guid}}</guid>
+        <guid{{#guidIsNotPermalink}} isPermaLink="false"{{/guidIsNotPermalink}}>{{guid}}</guid>
         {{/guid}}
         {{#author}}
         <author>{{author}}</author>
@@ -24,6 +31,9 @@
         {{#category}}
         <category>{{category}}</category>
         {{/category}}
+        {{#categories}}
+        <category>{{.}}</category>
+        {{/categories}}
         {{#comments}}
         <comments>{{comments}}</comments>
         {{/comments}}

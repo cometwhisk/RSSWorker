@@ -4,9 +4,7 @@ import { escapeCdata, getLiveRoomData, InvalidRoomIdError, sanitizeXmlCharacters
 const deal = async (ctx) => {
 	let feed;
 	try {
-		const roomID = ctx.req.param('roomID');
-		const captureRaw412 = roomID === '510' && ctx.req.query('capture412') === '1';
-		feed = await getLiveRoomData(roomID, globalThis.fetch, { captureRaw412 });
+		feed = await getLiveRoomData(ctx.req.param('roomID'));
 	} catch (error) {
 		if (error instanceof InvalidRoomIdError) {
 			return ctx.text('Invalid Bilibili live room ID', 400);

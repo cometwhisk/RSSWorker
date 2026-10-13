@@ -23,6 +23,11 @@ app.use(
 	})
 );
 
+app.use('/*', async (ctx, next) => {
+	ctx.header('Referrer-Policy', 'no-referrer');
+	await next();
+});
+
 // RSS readers authenticate with the query key; do not fall back to other auth modes.
 app.use('/*', async (ctx, next) => {
 	if (ctx.req.path === '/favicon.ico' && ['GET', 'HEAD'].includes(ctx.req.method)) {
@@ -34,17 +39,12 @@ app.use('/*', async (ctx, next) => {
 	}
 	const suppliedKey = ctx.req.query('key');
 	if (!suppliedKey || !(await timingSafeEqual(accessKey, suppliedKey))) {
-		if (ctx.req.path === '/' && ['GET', 'HEAD'].includes(ctx.req.method)) {
+		if (['GET', 'HEAD'].includes(ctx.req.method)) {
 			return ctx.html(renderHtml(indexHtml, ctx.env, { accessMessage: 'Missing or invalid access key' }), 403);
 		}
 		return ctx.text('Missing or invalid access key', 403);
 	}
 	return next();
-});
-
-app.use('/*', async (ctx, next) => {
-	ctx.header('Referrer-Policy', 'no-referrer');
-	await next();
 });
 
 // Canonical feed URLs are mounted directly at the host root.

@@ -132,24 +132,6 @@
 				color: #ff9b6e;
 			}
 
-			.repo-link {
-				margin: -1.35rem 0 0;
-				font-size: 0.72rem;
-				letter-spacing: 0.035em;
-			}
-
-			.repo-link a {
-				color: rgba(218, 211, 205, 0.54);
-				text-decoration: none;
-				text-underline-offset: 0.3em;
-				transition: color 180ms ease;
-			}
-
-			.repo-link a:hover,
-			.repo-link a:focus-visible {
-				color: #ff9b6e;
-			}
-
 			@keyframes breathe {
 				0%, 100% { transform: scale(0.98); opacity: 0.75; }
 				50% { transform: scale(1.035); opacity: 1; }
@@ -183,9 +165,6 @@
 				</div>
 			</div>
 			<h1 class="wordmark">RSS<span>Worker</span></h1>
-			{{#showRepositoryLink}}
-			<p class="repo-link"><a href="https://github.com/cometwhisk/RSSWorker" rel="noopener noreferrer">RSSWorker</a></p>
-			{{/showRepositoryLink}}
 		</main>
 	</body>
 </html>

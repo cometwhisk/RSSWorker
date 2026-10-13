@@ -39,8 +39,8 @@ app.use('/*', async (ctx, next) => {
 	}
 	const suppliedKey = ctx.req.query('key');
 	if (!suppliedKey || !(await timingSafeEqual(accessKey, suppliedKey))) {
-		if (['GET', 'HEAD'].includes(ctx.req.method)) {
-			return ctx.html(renderHtml(indexHtml, ctx.env, { showRepositoryLink: true }), 403);
+		if (ctx.req.path === '/' && ['GET', 'HEAD'].includes(ctx.req.method)) {
+			return ctx.html(renderHtml(indexHtml, ctx.env), 403);
 		}
 		return ctx.text('Missing or invalid access key', 403);
 	}

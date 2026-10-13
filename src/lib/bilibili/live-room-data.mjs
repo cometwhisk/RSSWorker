@@ -19,7 +19,102 @@ const normalizeRoomId = (value) => {
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-const getApiData = async (url, referer, fetchImpl) => {
+const raw412BodyByteLimit = 2048;
+const raw412ReadTimeoutMs = 500;
+
+const classifyContentType = (value) => {
+	const mediaType = (value ?? '').split(';', 1)[0].trim().toLowerCase();
+	if (mediaType === 'application/json' || mediaType.endsWith('+json')) {
+		return 'json';
+	}
+	if (mediaType === 'text/html') {
+		return 'html';
+	}
+	if (mediaType.startsWith('text/')) {
+		return 'text';
+	}
+	return 'other';
+};
+
+const readRaw412BodyPrefix = async (response) => {
+	const reader = response.body?.getReader();
+	if (!reader) {
+		return '';
+	}
+
+	const chunks = [];
+	let bytesRead = 0;
+	let timeoutId;
+	const decodePrefix = () => {
+		const bytes = new Uint8Array(bytesRead);
+		let offset = 0;
+		for (const chunk of chunks) {
+			bytes.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		let prefix = new TextDecoder().decode(bytes);
+		const encoder = new TextEncoder();
+		while (encoder.encode(prefix).byteLength > raw412BodyByteLimit) {
+			prefix = prefix.slice(0, -1);
+		}
+		return prefix;
+	};
+	const readPrefix = async () => {
+		while (bytesRead < raw412BodyByteLimit) {
+			const { done, value } = await reader.read();
+			if (done) {
+				break;
+			}
+			const chunk = value.subarray(0, raw412BodyByteLimit - bytesRead);
+			chunks.push(chunk);
+			bytesRead += chunk.byteLength;
+			if (chunk.byteLength < value.byteLength || bytesRead === raw412BodyByteLimit) {
+				break;
+			}
+		}
+		return decodePrefix();
+	};
+
+	try {
+		return await Promise.race([
+			readPrefix(),
+			new Promise((resolve) => {
+				timeoutId = setTimeout(() => resolve(decodePrefix()), raw412ReadTimeoutMs);
+			}),
+		]);
+	} catch {
+		return decodePrefix();
+	} finally {
+		clearTimeout(timeoutId);
+		try {
+			reader.cancel().catch(() => {});
+		} catch {
+			// Cleanup is best effort and must not delay the route response.
+		}
+		try {
+			reader.releaseLock();
+		} catch {
+			// A pending read can retain the lock until cancellation settles.
+		}
+	}
+};
+
+// TEMPORARY: only call for an explicitly opted-in room 510 request; remove after one sample.
+const logRaw412Sample = async (response) => {
+	try {
+		const bodyPrefix = await readRaw412BodyPrefix(response);
+		console.error('[bilibili] raw_412_sample', {
+			endpoint: 'room_init',
+			status: 412,
+			contentTypeClass: classifyContentType(response.headers.get('content-type')),
+			bodyPrefix,
+		});
+	} catch {
+		// Raw capture must never change the route's existing error behavior.
+	}
+};
+
+const getApiData = async (url, referer, fetchImpl, captureRaw412 = false) => {
 	let response;
 	try {
 		response = await fetchImpl(url, {
@@ -30,6 +125,9 @@ const getApiData = async (url, referer, fetchImpl) => {
 		throw new Error('Bilibili API request failed');
 	}
 	if (!response?.ok) {
+		if (response?.status === 412 && captureRaw412) {
+			await logRaw412Sample(response);
+		}
 		throw new Error('Bilibili API request failed');
 	}
 
@@ -135,10 +233,15 @@ const parseLiveTime = (value) => {
 	return date.toUTCString();
 };
 
-const getLiveRoomId = async (shortId, fetchImpl) => {
+const getLiveRoomId = async (shortId, fetchImpl, captureRaw412) => {
 	const url = new URL('https://api.live.bilibili.com/room/v1/Room/room_init');
 	url.searchParams.set('id', shortId);
-	const data = await getApiData(url, `https://live.bilibili.com/${shortId}`, fetchImpl);
+	const data = await getApiData(
+		url,
+		`https://live.bilibili.com/${shortId}`,
+		fetchImpl,
+		captureRaw412 && shortId === '510',
+	);
 	try {
 		return normalizeRoomId(data.room_id);
 	} catch {
@@ -146,13 +249,13 @@ const getLiveRoomId = async (shortId, fetchImpl) => {
 	}
 };
 
-export const getLiveRoomData = async (inputRoomId, fetchImpl = globalThis.fetch) => {
+export const getLiveRoomData = async (inputRoomId, fetchImpl = globalThis.fetch, diagnostics = {}) => {
 	let roomId = normalizeRoomId(inputRoomId);
 	if (typeof fetchImpl !== 'function') {
 		throw new Error('Bilibili API request failed');
 	}
 	if (Number(roomId) < 10_000) {
-		roomId = await getLiveRoomId(roomId, fetchImpl);
+		roomId = await getLiveRoomId(roomId, fetchImpl, diagnostics?.captureRaw412 === true);
 	}
 
 	const roomUrl = `https://live.bilibili.com/${roomId}`;

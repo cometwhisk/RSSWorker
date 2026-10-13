@@ -1,14 +1,180 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<title>RSSWorker - Made with ❤</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#101115" />
+		<title>RSSWorker</title>
 		{{#siteIconUrl}}
 		<link rel="icon" href="{{siteIconUrl}}" />
 		{{/siteIconUrl}}
+		<style>
+			:root {
+				color-scheme: dark;
+				font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				font-synthesis: none;
+				text-rendering: optimizeLegibility;
+				-webkit-font-smoothing: antialiased;
+				-moz-osx-font-smoothing: grayscale;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				min-width: 280px;
+				min-height: 100vh;
+				min-height: 100svh;
+				margin: 0;
+				display: grid;
+				place-items: center;
+				overflow: hidden;
+				color: #f4f0ec;
+				background:
+					radial-gradient(ellipse at 50% 43%, rgba(255, 119, 72, 0.12), transparent 31%),
+					radial-gradient(ellipse at 18% 82%, rgba(91, 103, 177, 0.09), transparent 32%),
+					linear-gradient(145deg, #111216 4%, #0c0d11 58%, #151113 100%);
+			}
+
+			body::after {
+				position: fixed;
+				inset: 0;
+				z-index: 0;
+				background-image: radial-gradient(rgba(255, 255, 255, 0.22) 0.55px, transparent 0.55px);
+				background-size: 5px 5px;
+				content: "";
+				opacity: 0.055;
+				pointer-events: none;
+			}
+
+			.cover {
+				position: relative;
+				z-index: 1;
+				display: grid;
+				justify-items: center;
+				gap: clamp(1.8rem, 5vh, 2.8rem);
+				padding: 2rem;
+			}
+
+			.signal {
+				position: relative;
+				display: grid;
+				width: clamp(210px, 48vw, 330px);
+				aspect-ratio: 1;
+				place-items: center;
+				isolation: isolate;
+			}
+
+			.signal::before,
+			.signal::after {
+				position: absolute;
+				inset: 8%;
+				border: 1px solid rgba(255, 241, 231, 0.085);
+				border-radius: 50%;
+				content: "";
+			}
+
+			.signal::before {
+				inset: 16%;
+				border-color: rgba(255, 151, 105, 0.17);
+				box-shadow: 0 0 72px rgba(255, 115, 67, 0.11), inset 0 0 56px rgba(255, 115, 67, 0.055);
+				animation: breathe 7s ease-in-out infinite;
+			}
+
+			.signal::after {
+				border-top-color: rgba(255, 155, 110, 0.48);
+				transform: rotate(-24deg) scaleX(0.88);
+			}
+
+			.orbit-dot {
+				position: absolute;
+				top: 13%;
+				right: 21%;
+				width: 7px;
+				aspect-ratio: 1;
+				border-radius: 50%;
+				background: #ff9b6e;
+				box-shadow: 0 0 18px rgba(255, 131, 82, 0.9);
+			}
+
+			.mark {
+				position: relative;
+				z-index: 1;
+				display: grid;
+				width: 42%;
+				aspect-ratio: 1;
+				place-items: center;
+				border: 1px solid rgba(255, 255, 255, 0.24);
+				border-radius: 31%;
+				background: linear-gradient(145deg, #ff9a64, #f26042 68%, #d9493e);
+				box-shadow: 0 22px 70px rgba(240, 89, 58, 0.25), inset 0 1px rgba(255, 255, 255, 0.35);
+				transform: rotate(-7deg);
+			}
+
+			.mark svg {
+				width: 58%;
+				height: 58%;
+				transform: rotate(7deg);
+			}
+
+			.wordmark {
+				margin: 0;
+				color: rgba(245, 241, 236, 0.88);
+				font-size: clamp(0.76rem, 2vw, 0.9rem);
+				font-weight: 600;
+				letter-spacing: 0.42em;
+				text-indent: 0.42em;
+				text-transform: uppercase;
+			}
+
+			.wordmark span {
+				color: #ff9b6e;
+			}
+
+			.access-message {
+				margin: -1.35rem 0 0;
+				color: rgba(218, 211, 205, 0.54);
+				font-size: 0.72rem;
+				letter-spacing: 0.035em;
+			}
+
+			@keyframes breathe {
+				0%, 100% { transform: scale(0.98); opacity: 0.75; }
+				50% { transform: scale(1.035); opacity: 1; }
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				*,
+				*::before,
+				*::after {
+					animation-duration: 0.01ms !important;
+					animation-iteration-count: 1 !important;
+					scroll-behavior: auto !important;
+				}
+			}
+
+			@media (max-width: 420px) {
+				.cover { gap: 1.7rem; }
+				.wordmark { letter-spacing: 0.34em; text-indent: 0.34em; }
+			}
+		</style>
 	</head>
 	<body>
-		<h1>RSSWorker - Made with ❤</h1>
-		<p>See <a href="https://github.com/yllhwa/RSSWorker">GitHub</a> for more information.</p>
+		<main class="cover" aria-label="RSSWorker">
+			<div class="signal" aria-hidden="true">
+				<span class="orbit-dot"></span>
+				<div class="mark">
+					<svg viewBox="0 0 120 120" fill="none" aria-hidden="true">
+						<circle cx="28" cy="92" r="7" fill="#fff8f2" />
+						<path d="M28 61a31 31 0 0 1 31 31M28 34a58 58 0 0 1 58 58" stroke="#fff8f2" stroke-width="8" stroke-linecap="round" />
+					</svg>
+				</div>
+			</div>
+			<h1 class="wordmark">RSS<span>Worker</span></h1>
+			{{#accessMessage}}
+			<p class="access-message">{{accessMessage}}</p>
+			{{/accessMessage}}
+		</main>
 	</body>
 </html>

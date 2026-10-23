@@ -7,30 +7,26 @@ let deal = async (ctx) => {
 	let displayArticle = '0';
 	let displayComments = '0';
 
-	const containerData = await fetch(`https://m.weibo.cn/api/container/getIndex?type=uid&value=${uid}`, {
-		headers: {
-			Referer: `https://m.weibo.cn/u/${uid}`,
-			Cookie: ctx.env.WEIBO_COOKIE || '',
-			Accept: 'application/json, text/plain, */*',
-			...weiboUtils.apiHeaders,
-		},
-	}).then((res) => res.json());
+	const referer = `https://m.weibo.cn/u/${uid}`;
+	const containerData = await weiboUtils.fetchApiJson(ctx, `https://m.weibo.cn/api/container/getIndex?type=uid&value=${uid}`, referer);
+	const userInfo = containerData.data?.userInfo;
+	const containerId = containerData.data?.tabsInfo?.tabs?.find((item) => item.tab_type === 'weibo')?.containerid;
+	if (!userInfo || !containerId) {
+		throw new Error('Weibo user profile unavailable');
+	}
 
-	const name = containerData.data.userInfo.screen_name;
-	const description = containerData.data.userInfo.description;
-	const profileImageUrl = containerData.data.userInfo.profile_image_url;
-	const containerId = containerData.data.tabsInfo.tabs.filter((item) => item.tab_type === 'weibo')[0].containerid;
-
-	const cards = await fetch(`https://m.weibo.cn/api/container/getIndex?type=uid&value=${uid}&containerid=${containerId}`, {
-		headers: {
-			Referer: `https://m.weibo.cn/u/${uid}`,
-			Cookie: ctx.env.WEIBO_COOKIE || '',
-			Accept: 'application/json, text/plain, */*',
-			...weiboUtils.apiHeaders,
-		},
-	})
-		.then((res) => res.json())
-		.then((res) => res.data.cards);
+	const name = userInfo.screen_name;
+	const description = userInfo.description;
+	const profileImageUrl = userInfo.profile_image_url;
+	const cardsData = await weiboUtils.fetchApiJson(
+		ctx,
+		`https://m.weibo.cn/api/container/getIndex?type=uid&value=${uid}&containerid=${containerId}`,
+		referer,
+	);
+	const cards = cardsData.data?.cards;
+	if (!Array.isArray(cards)) {
+		throw new Error('Weibo user timeline unavailable');
+	}
 
 	let resultItems = await Promise.all(
 		cards

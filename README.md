@@ -8,7 +8,6 @@
 
 - Twitch 直播频道：`/twitch/live/:login`
 - 微博用户：`/weibo/user/:uid`
-- 小红书用户：`/xiaohongshu/user/:uid`
 
 ## 访问保护
 
@@ -24,13 +23,9 @@ https://rss.example.com/weibo/user/123456?key=<密钥>
 
 将可公开访问的 HTTPS 图片地址设为普通 Variable `RSS_SITE_ICON_URL`。它用于网页标签页图标和公开的 `/favicon.ico`；RSS XML 不包含图标，订阅内容仍需密钥。
 
-## 小红书
-
-使用用户主页链接中的用户 ID（不是小红书号）。订阅还需要在 Cloudflare 添加 `XIAOHONGSHU_COOKIE` Secret；Cookie 失效时更新即可。请勿公开或提交 Cookie。
-
 ## 微博
 
-微博订阅需要在 Cloudflare 添加 `WEIBO_COOKIE` Secret。可从已登录的微博网页请求中获取 Cookie；过期后更新。请勿公开或提交 Cookie。
+微博订阅自动获取并短时缓存游客会话，不需要也不会读取个人登录 Cookie。
 
 ## 部署与开发
 

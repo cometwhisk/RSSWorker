@@ -1,12 +1,189 @@
 const { parseDate, parseRelativeDate } = require('../../utils/parse-date');
 
+const apiHeaders = {
+	'MWeibo-Pwa': 1,
+	'X-Requested-With': 'XMLHttpRequest',
+	'User-Agent':
+		'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1',
+};
+
+const visitorUrl = 'https://visitor.passport.weibo.cn/visitor/genvisitor2';
+const visitorCookieTtlMs = 10 * 60 * 1000;
+const defaultRequestTimeoutMs = 8000;
+
+const parseVisitorCookie = (body) => {
+	const open = body.indexOf('(');
+	const close = body.lastIndexOf(')');
+	if (open < 0 || close <= open) {
+		throw new Error('Weibo visitor authentication failed');
+	}
+
+	let payload;
+	try {
+		payload = JSON.parse(body.slice(open + 1, close));
+	} catch {
+		throw new Error('Weibo visitor authentication failed');
+	}
+
+	const { sub, subp } = payload?.data || {};
+	const isSafeCookieValue = (value) =>
+		typeof value === 'string' && value.length <= 4096 && /^[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]+$/.test(value);
+	if (Number(payload?.retcode) !== 20000000 || !isSafeCookieValue(sub) || !isSafeCookieValue(subp)) {
+		throw new Error('Weibo visitor authentication failed');
+	}
+	return `SUB=${sub}; SUBP=${subp}`;
+};
+
+const createVisitorSession = ({
+	fetchImpl = (...args) => fetch(...args),
+	now = () => Date.now(),
+	ttlMs = visitorCookieTtlMs,
+	timeoutMs = defaultRequestTimeoutMs,
+} = {}) => {
+	let cachedCookie = '';
+	let expiresAt = 0;
+	let pendingCookie = null;
+
+	const clearCookie = () => {
+		cachedCookie = '';
+		expiresAt = 0;
+	};
+	const clearCookieIfCurrent = (rejectedCookie) => {
+		if (cachedCookie === rejectedCookie) {
+			clearCookie();
+		}
+	};
+	const requestTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : defaultRequestTimeoutMs;
+	const withRequestTimeout = async (operation) => {
+		const controller = typeof AbortController === 'function' ? new AbortController() : null;
+		let timeoutId;
+		const timeout = new Promise((_, reject) => {
+			timeoutId = setTimeout(() => {
+				controller?.abort();
+				reject(new Error('Weibo upstream request timed out'));
+			}, requestTimeoutMs);
+		});
+		try {
+			return await Promise.race([Promise.resolve().then(() => operation(controller?.signal)), timeout]);
+		} finally {
+			clearTimeout(timeoutId);
+		}
+	};
+
+	const getCookie = async () => {
+		if (cachedCookie && now() < expiresAt) {
+			return cachedCookie;
+		}
+		if (pendingCookie) {
+			return pendingCookie;
+		}
+
+		const request = (async () => {
+			const cookie = await withRequestTimeout(async (signal) => {
+				const response = await fetchImpl(visitorUrl, {
+					method: 'POST',
+					headers: {
+						Accept: '*/*',
+						'Content-Type': 'application/x-www-form-urlencoded',
+						Referer: 'https://m.weibo.cn/',
+						'User-Agent': apiHeaders['User-Agent'],
+					},
+					body: new URLSearchParams({ cb: 'visitor_gray_callback', tid: '', from: 'weibo' }).toString(),
+					signal,
+				});
+				if (!response.ok) {
+					throw new Error('Weibo visitor authentication failed');
+				}
+				return parseVisitorCookie(await response.text());
+			});
+			cachedCookie = cookie;
+			expiresAt = now() + Math.max(1, ttlMs);
+			return cookie;
+		})();
+
+		pendingCookie = request;
+		try {
+			return await request;
+		} finally {
+			if (pendingCookie === request) {
+				pendingCookie = null;
+			}
+		}
+	};
+
+	const requestWithCookie = async (url, cookie, { referer, headers = {} } = {}) => {
+		try {
+			return await withRequestTimeout(async (signal) => {
+				const response = await fetchImpl(url, {
+					headers: {
+						Accept: 'application/json, text/plain, */*',
+						...apiHeaders,
+						...headers,
+						Referer: referer,
+						Cookie: cookie,
+					},
+					signal,
+				});
+				if (!response.ok) {
+					return { kind: 'failed' };
+				}
+				const payload = await response.json();
+				if (payload?.ok === 1) {
+					return { kind: 'success', payload };
+				}
+				return { kind: payload?.ok === -100 ? 'unauthorized' : 'failed' };
+			});
+		} catch {
+			return { kind: 'failed' };
+		}
+	};
+
+	const requestJson = async (url, { referer, headers = {} } = {}) => {
+		let guestCookie = '';
+		try {
+			guestCookie = await getCookie();
+		} catch {
+			// Keep visitor endpoint failures out of the generic API error.
+		}
+
+		if (guestCookie) {
+			let result = await requestWithCookie(url, guestCookie, { referer, headers });
+			if (result.kind === 'success') {
+				return result.payload;
+			}
+			if (result.kind === 'unauthorized') {
+				clearCookieIfCurrent(guestCookie);
+				try {
+					const refreshedCookie = await getCookie();
+					result = await requestWithCookie(url, refreshedCookie, { referer, headers });
+					if (result.kind === 'success') {
+						return result.payload;
+					}
+					if (result.kind === 'unauthorized') {
+						clearCookieIfCurrent(refreshedCookie);
+					}
+				} catch {
+					// Fall through to the generic request error.
+				}
+			}
+		}
+
+		throw new Error('Weibo API request failed');
+	};
+
+	return { clearCookie, getCookie, requestJson };
+};
+
+const visitorSession = createVisitorSession();
+
 const weiboUtils = {
-	apiHeaders: {
-		'MWeibo-Pwa': 1,
-		'X-Requested-With': 'XMLHttpRequest',
-		'User-Agent':
-			'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1',
-	},
+	apiHeaders,
+	createVisitorSession,
+	fetchApiJson: (_ctx, url, referer, headers) =>
+		visitorSession.requestJson(url, {
+			referer,
+			headers,
+		}),
 	resolveMblogBid: (item) => {
 		let bid = item?.mblog?.bid;
 		if (bid === '' && item.scheme) {
@@ -338,13 +515,7 @@ const weiboUtils = {
 	},
 	getShowData: async (ctx, uid, bid) => {
 		const link = `https://m.weibo.cn/statuses/show?id=${bid}`;
-		const itemResponse = await fetch(link, {
-			headers: {
-				Referer: `https://m.weibo.cn/u/${uid}`,
-				Cookie: ctx.env.WEIBO_COOKIE || '',
-				...weiboUtils.apiHeaders,
-			},
-		}).then((res) => res.json());
+		const itemResponse = await weiboUtils.fetchApiJson(ctx, link, `https://m.weibo.cn/u/${uid}`);
 		return itemResponse.data.data;
 	},
 	formatVideo: (itemDesc, status) => {
@@ -401,15 +572,7 @@ const weiboUtils = {
 			}
 			const articleId = articleIdMatch[1];
 			const link = `https://card.weibo.com/article/m/aj/detail?id=${articleId}`;
-			const response = await fetch(link, {
-				headers: {
-					Referer: `https://card.weibo.com/article/m/show/id/${articleId}`,
-					Cookie: ctx.env.WEIBO_COOKIE || '',
-					...weiboUtils.apiHeaders,
-				},
-			})
-				.then((res) => res.json())
-				.then((res) => res.data);
+			const response = (await weiboUtils.fetchApiJson(ctx, link, `https://card.weibo.com/article/m/show/id/${articleId}`)).data;
 			const article = response.data;
 			if (article && article.title && article.content) {
 				const title = article.title;
@@ -483,15 +646,7 @@ const weiboUtils = {
 			const id = status.id;
 			const mid = status.mid;
 			const link = `https://m.weibo.cn/comments/hotflow?id=${id}&mid=${mid}&max_id_type=0`;
-			const response = await fetch(link, {
-				headers: {
-					Referer: `https://m.weibo.cn/detail/${id}`,
-					Cookie: ctx.env.WEIBO_COOKIE || '',
-					...weiboUtils.apiHeaders,
-				},
-			})
-				.then((res) => res.json())
-				.then((res) => res.data);
+			const response = (await weiboUtils.fetchApiJson(ctx, link, `https://m.weibo.cn/detail/${id}`)).data;
 			if (response.data && response.data.data) {
 				const comments = response.data.data;
 				itemDesc += `<br clear="both" /><div style="clear: both"></div><div style="background: #80808010;border-top:1px solid #80808030;border-bottom:1px solid #80808030;margin:0;padding:5px 20px;">`;
